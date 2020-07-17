@@ -35,12 +35,12 @@ import os; package_path = os.path.join(sublime.packages_path(), "GEMTeacher"); o
 (6) First-time configuration:
 Add teachers
 ```
-    ./gem -c config.json -add_teacher teachers.txt
+    ./gem -c config.json -add_teachers teachers.txt
 ```
 
 Add students
 ```
-    ./gem -c config.json -add_student students.txt
+    ./gem -c config.json -add_students students.txt
 ```
 
 Run the server
@@ -50,6 +50,13 @@ Run the server
 
 Examples of files containing configurations, teachers and students: [config.json](Examples/gem_config.json), 
 [teachers.txt](Examples/teachers.txt), [students.txt](Examples/students.txt)
+
+NOTE: In development mode, with golang installed, the teacher should compile the server, instead of running the binary.
+```
+go run -c config.json -add_teachers teachers.txt
+go run -c config.json -add_students students.txt
+go run -c config.json
+```
 
 (7) When the server is run for the first time after teachers and students are added, teachers and students must configure their Sublime Text modules by going through 3 steps in Sublime Text: (i) specify a folder on their computers to store local files, (ii) set the server address, which is shown when the server is run, and (iii) complete the registration by simply entering their usernames, as specify in *teachers.txt* and *students.txt*.
 
