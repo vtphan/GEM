@@ -30,6 +30,7 @@ import os; package_path = os.path.join(sublime.packages_path(), "GEMTeacher"); o
 ```
 (4) Paste copied code to Console and hit enter.
 
+### Production Mode
 (5) Download the latest server ([Windows](https://www.dropbox.com/s/eehyziwakoj5ugf/gem_0.93.exe?dl=0), [MacOS](https://www.dropbox.com/s/rwg614s92531tsm/gem_0.93?dl=0)) and make them *executable* on teacher's computer.  This command-line server needs to be run on the teacher's computer every time GEM is used in class.
 
 (6) First-time configuration:
@@ -51,17 +52,36 @@ Run the server
 Examples of files containing configurations, teachers and students: [config.json](Examples/gem_config.json), 
 [teachers.txt](Examples/teachers.txt), [students.txt](Examples/students.txt)
 
-## NOTE
-In development mode, with golang installed, the teacher should compile the server, instead of running the binary.
+When the server is run for the first time after teachers and students are added, teachers and students must configure their Sublime Text modules by going through 3 steps in Sublime Text: (i) specify a folder on their computers to store local files, (ii) set the server address, which is shown when the server is run, and (iii) complete the registration by simply entering their usernames, as specify in *teachers.txt* and *students.txt*.
+
+These steps are done only once.  In subsequent usage, there is no need to go through these steps (even though the teacher's computer has a new IP address.)
+
+### Development Mode
+(5) With golang installed, the teacher should compile the server, instead of running the binary as in Production mode.
+
+Add teachers
 ```
 go run -c config.json -add_teachers teachers.txt
+```
+
+Add students
+```
 go run -c config.json -add_students students.txt
+```
+
+Run the server
+```
 go run -c config.json
 ```
 
-(7) When the server is run for the first time after teachers and students are added, teachers and students must configure their Sublime Text modules by going through 3 steps in Sublime Text: (i) specify a folder on their computers to store local files, (ii) set the server address, which is shown when the server is run, and (iii) complete the registration by simply entering their usernames, as specify in *teachers.txt* and *students.txt*.
+Examples of files containing configurations, teachers and students: [config.json](Examples/gem_config.json), 
+[teachers.txt](Examples/teachers.txt), [students.txt](Examples/students.txt)
+
+When the server is run for the first time after teachers and students are added, teachers and students must configure their Sublime Text modules by going through 3 steps in Sublime Text: (i) specify a folder on their computers to store local files, (ii) set the server address, which is shown when the server is run, and (iii) complete the registration by simply entering their usernames, as specify in *teachers.txt* and *students.txt*.
 
 These steps are done only once.  In subsequent usage, there is no need to go through these steps (even though the teacher's computer has a new IP address.)
+
+
 
 ### TA's installation
 
