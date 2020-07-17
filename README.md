@@ -51,7 +51,8 @@ Run the server
 Examples of files containing configurations, teachers and students: [config.json](Examples/gem_config.json), 
 [teachers.txt](Examples/teachers.txt), [students.txt](Examples/students.txt)
 
-NOTE: In development mode, with golang installed, the teacher should compile the server, instead of running the binary.
+## NOTE
+In development mode, with golang installed, the teacher should compile the server, instead of running the binary.
 ```
 go run -c config.json -add_teachers teachers.txt
 go run -c config.json -add_students students.txt
