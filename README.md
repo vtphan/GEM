@@ -61,17 +61,17 @@ These steps are done only once.  In subsequent usage, there is no need to go thr
 
 Add teachers
 ```
-go run -c config.json -add_teachers teachers.txt
+go run . -c config.json -add_teachers teachers.txt
 ```
 
 Add students
 ```
-go run -c config.json -add_students students.txt
+go run . -c config.json -add_students students.txt
 ```
 
 Run the server
 ```
-go run -c config.json
+go run . -c config.json
 ```
 
 Examples of files containing configurations, teachers and students: [config.json](Examples/gem_config.json), 
