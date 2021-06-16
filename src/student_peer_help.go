@@ -72,7 +72,7 @@ func student_return_without_feedbackHandler(w http.ResponseWriter, r *http.Reque
 func student_send_help_messageHandler(w http.ResponseWriter, r *http.Request, who string, uid int) {
 	submission_id, _ := strconv.Atoi(r.FormValue("submission_id"))
 	message := r.FormValue("message")
-	res, err := AddHelpMessageSQL.Exec(submission_id, uid, message, time.Now())
+	res, err := AddHelpMessageSQL.Exec(submission_id, uid, message, "student", time.Now())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,13 +87,15 @@ func student_send_help_messageHandler(w http.ResponseWriter, r *http.Request, wh
 	helpSub := HelpSubmissions[submission_id]
 	student_id := helpSub.Uid
 	message = helpSub.Content + "\n\nFeedback: " + message
+	t := time.Now()
+	filename := "feedback_" + t.Format(time.RFC3339) + ".txt"
 	b := &Board{
 		Content:      message,
 		Answer:       "",
 		Attempts:     0,
-		Filename:     "peer_feedback.txt",
+		Filename:     filename,
 		Pid:          int(message_id),
-		StartingTime: time.Now(),
+		StartingTime: t,
 		Type:         "peer_feedback",
 	}
 	Students[student_id].Boards = append(Students[student_id].Boards, b)
@@ -109,13 +111,16 @@ func sendThankYouHandler(w http.ResponseWriter, r *http.Request, who string, uid
 	}
 	if useful == "yes" {
 		studentID := 0
-		rows, _ := Database.Query("select student_id from help_message where id=?", message_id)
+		feedbackType := ""
+		rows, _ := Database.Query("select user_id, type from help_message where id=?", message_id)
 		for rows.Next() {
-			rows.Scan(&studentID)
+			rows.Scan(&studentID, &feedbackType)
 			break
 		}
 		rows.Close()
-		Students[studentID].ThankStatus = 1
+		if feedbackType == "student" {
+			Students[studentID].ThankStatus = 1
+		}
 	}
 
 }

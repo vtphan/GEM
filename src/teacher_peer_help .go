@@ -59,10 +59,11 @@ func teacher_return_without_feedbackHandler(w http.ResponseWriter, r *http.Reque
 func teacher_send_help_messageHandler(w http.ResponseWriter, r *http.Request, who string, uid int) {
 	submission_id, _ := strconv.Atoi(r.FormValue("submission_id"))
 	message := r.FormValue("message")
-	_, err := AddHelpMessageSQL.Exec(submission_id, uid, message, time.Now())
+	res, err := AddHelpMessageSQL.Exec(submission_id, uid, message, "teacher", time.Now())
 	if err != nil {
 		log.Fatal(err)
 	}
+	message_id, _ := res.LastInsertId()
 	// student_id := 0
 	// rows, _ := Database.Query("select student_id from help_submission where id=?", submission_id)
 	// for rows.Next() {
@@ -73,13 +74,15 @@ func teacher_send_help_messageHandler(w http.ResponseWriter, r *http.Request, wh
 	helpSub := HelpSubmissions[submission_id]
 	student_id := helpSub.Uid
 	message = helpSub.Content + "\n\nFeedback: " + message
+	t := time.Now()
+	filename := "feedback_" + t.Format(time.RFC3339) + ".txt"
 	b := &Board{
 		Content:      message,
 		Answer:       "",
 		Attempts:     0,
-		Filename:     "peer_feedback.txt",
-		Pid:          0,
-		StartingTime: time.Now(),
+		Filename:     filename,
+		Pid:          int(message_id),
+		StartingTime: t,
 		Type:         "peer_feedback",
 	}
 	Students[student_id].Boards = append(Students[student_id].Boards, b)
