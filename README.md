@@ -1,5 +1,13 @@
 Hello! My name is Huy Tran and I am a senior Math/CS major. This is my summer project.
 
+Install go, and gosqlite
+
+```
+go get github.com/mattn/go-sqlite3
+```
+
+May have to do "go mod init" before this.
+
 How to run the server locally:
 
 ```
