@@ -1,0 +1,8 @@
+{
+        "CourseId": "MyCourse",
+        "Database": "MyCourse.sqlite3",
+        "LogFile": "MyCourse.log",
+        "IP": "",
+        "Port": 8080,
+        "NameServer": ""
+}
