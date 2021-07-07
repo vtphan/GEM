@@ -88,3 +88,9 @@ func teacher_gets_queueHandler(w http.ResponseWriter, r *http.Request, who strin
 }
 
 //-----------------------------------------------------------------------------------
+func teacher_periodic_updateHandler(w http.ResponseWriter, r *http.Request, who string, uid int) {
+
+	submissionQueueCount := len(WorkingSubs)
+
+	fmt.Fprintf(w, "%s", strconv.Itoa(submissionQueueCount))
+}

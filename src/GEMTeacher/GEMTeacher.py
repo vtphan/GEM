@@ -20,7 +20,7 @@ gemtFILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), "info")
 gemtSERVER = ''
 gemtCurrentHelpSubId = None
 gemtHelpRequestMessage = ["You have fetched a help request entry.", "There is no pending help request."]
-
+gemtTracking = True
 # ------------------------------------------------------------------
 # ------------------------------------------------------------------
 # These functionalities are unique to the GEMTeacher module
@@ -154,6 +154,7 @@ class gemtShare(sublime_plugin.TextCommand):
 				mesg = 'Sharing graded content. '
 			mesg += response
 			sublime.message_dialog(mesg)
+			gemt_periodic_update()
 
 # ------------------------------------------------------------------
 class gemtDeactivateProblems(sublime_plugin.TextCommand):
@@ -168,6 +169,7 @@ class gemtDeactivateProblems(sublime_plugin.TextCommand):
 				sublime.message_dialog('Unknown or inactive problem!')
 			elif response == '0':
 				sublime.message_dialog('Problem is now inactive.')
+				gemtTracking = False
 			elif response == '1':
 				global gemtSERVER
 				with open(gemtFILE, 'r') as f:
@@ -773,3 +775,16 @@ class gemtGetHelpCode(sublime_plugin.TextCommand):
 # 		self.window.run_command("close")
 # 		self.window.run_command("hide_panel", {"cancel": False})
 
+
+def gemt_periodic_update():
+
+	if gemtTracking:
+		subsCount = gemtRequest('teacher_periodic_update', {})
+		if subsCount is None:
+			print('Response is None')
+			gemtTracking = False
+			return
+		
+		sublime.status_message("Submission(s): " + subsCount)
+		sublime.set_timeout_async(gemt_periodic_update, 4000)
+		
