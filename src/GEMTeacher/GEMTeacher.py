@@ -159,6 +159,7 @@ class gemtShare(sublime_plugin.TextCommand):
 # ------------------------------------------------------------------
 class gemtDeactivateProblems(sublime_plugin.TextCommand):
 	def run(self, edit):
+		global gemtTracking
 		if self.view.file_name() is None:
 			sublime.message_dialog('Unknown problem!')
 			return
@@ -169,7 +170,6 @@ class gemtDeactivateProblems(sublime_plugin.TextCommand):
 				sublime.message_dialog('Unknown or inactive problem!')
 			elif response == '0':
 				sublime.message_dialog('Problem is now inactive.')
-				gemtTracking = False
 			elif response == '1':
 				global gemtSERVER
 				with open(gemtFILE, 'r') as f:
@@ -177,6 +177,7 @@ class gemtDeactivateProblems(sublime_plugin.TextCommand):
 				passcode = gemtRequest('teacher_gets_passcode', {})
 				p = urllib.parse.urlencode({'pc' : passcode, 'filename':filename})
 				webbrowser.open(gemtSERVER + '/view_answers?' + p)
+			gemtTracking = False
 
 # ------------------------------------------------------------------
 class gemtClearSubmissions(sublime_plugin.ApplicationCommand):
@@ -777,7 +778,7 @@ class gemtGetHelpCode(sublime_plugin.TextCommand):
 
 
 def gemt_periodic_update():
-
+	global gemtTracking
 	if gemtTracking:
 		subsCount = gemtRequest('teacher_periodic_update', {})
 		if subsCount is None:
