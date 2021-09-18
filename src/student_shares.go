@@ -95,3 +95,13 @@ func student_sharesHandler(w http.ResponseWriter, r *http.Request, who string, u
 }
 
 //-----------------------------------------------------------------------------------
+
+func student_back_feedbackHandler(w http.ResponseWriter, r *http.Request, who string, uid int) {
+	filename := r.FormValue("filename")
+	feedback := r.FormValue("response")
+	prob, ok := ActiveProblems[filename]
+	if ok {
+		pid := prob.Info.Pid
+		AddBackFeedbackSQL.Exec(uid, pid, feedback, time.Now())
+	}
+}

@@ -41,6 +41,7 @@ var AddFeedbackSQL *sql.Stmt
 var AddScoreSQL *sql.Stmt
 var UpdateScoreSQL *sql.Stmt
 var AddTagSQL *sql.Stmt
+var AddBackFeedbackSQL *sql.Stmt
 
 //---------------------------------------------------------
 // Authentication
@@ -112,7 +113,7 @@ type ProblemInfo struct {
 	Merit       int
 	Effort      int
 	Attempts    int
-	Topic_id	int
+	Topic_id    int
 	Tag         string
 	Pid         int
 	ExactAnswer bool

@@ -11,6 +11,7 @@ import random
 import shutil
 import datetime
 import webbrowser
+import pickle
 
 gemsUpdateIntervalLong  = 20000		# Update interval
 gemsUpdateIntervalShort = 10000		# When submission is being looked at
@@ -28,6 +29,14 @@ gemsUpdateMessage = {
 	3 : "Good effort!!!  However, the teacher did not think your solution was correct.",
 	4 : "Your solution was correct.",
 }
+# Set of filename: to check whether the student got a feedback against a problem
+gotFeedback = set()
+
+# Set of filename: to check whether the student already submitted for this problem.
+submitted = set()
+
+# Stores the submitted and gotFeedback in case sublime text exits
+gemsSubFile = os.path.join(os.path.dirname(os.path.realpath(__file__)), "sub.p")
 
 # ------------------------------------------------------------------
 class gemsAttendanceReport(sublime_plugin.ApplicationCommand):
@@ -121,11 +130,15 @@ def gems_periodic_update():
 # ------------------------------------------------------------------
 def gems_share(self, edit, priority):
 	global gemsTracking
+	global gotFeedback
+	global submitted
+
 	fname = self.view.file_name()
 	if fname is None:
 		sublime.message_dialog('Cannot share unsaved content.')
 		return
 	content = self.view.substr(sublime.Region(0, self.view.size())).lstrip()
+	filename = os.path.basename(fname)
 	items = content.rsplit(gemsAnswerTag, 1)
 	if len(items)==2:
 		answer = items[1].strip()
@@ -134,15 +147,38 @@ def gems_share(self, edit, priority):
 	data = dict(
 		content=content,
 		answer=answer,
-		filename=os.path.basename(fname),
+		filename=filename,
 		priority=priority,
 	)
 	response = gemsRequest('student_shares', data)
 	sublime.message_dialog(response)
+	if priority == 1:
+		if filename in submitted and filename in gotFeedback:
+			ask_for_back_feedback(filename)
+			gotFeedback.remove(filename)
+		submitted.add(filename)
+		with open(gemsSubFile, "wb+") as f:
+			pickle.dump({"gotFeedback": gotFeedback, "submitted": submitted}, f)
+
 	if gemsTracking==False:
 		gemsTracking = True
 		sublime.set_timeout_async(gems_periodic_update, 5000)
 
+def ask_for_back_feedback(filename):
+	resp = sublime.yes_no_cancel_dialog("Was the feedback you received on this problem helpful? Please answer Yes or No", "Yes", "No")
+	if resp == sublime.DIALOG_YES:
+		send_student_back_feedback(filename, "yes")
+	elif resp == sublime.DIALOG_NO:
+		send_student_back_feedback(filename, "no")
+	elif resp == sublime.DIALOG_CANCEL:
+		ask_for_back_feedback(filename)
+
+def send_student_back_feedback(filename, response):
+	data = dict(
+		filename=filename,
+		response=response,
+	)
+	gemsRequest('save_back_feedback', data)
 # ------------------------------------------------------------------
 class gemsNeedHelp(sublime_plugin.TextCommand):
 	def run(self, edit):
@@ -170,6 +206,9 @@ class gemsGetBoardContent(sublime_plugin.ApplicationCommand):
 		old_dir = os.path.join(gemsFOLDER, 'OLD')
 		if not os.path.exists(old_dir):
 			os.mkdir(old_dir)
+		
+		global gotFeedback
+		global submitted
 
 		for board in json_obj:
 			content = board['Content']
@@ -178,6 +217,9 @@ class gemsGetBoardContent(sublime_plugin.ApplicationCommand):
 			if board['Type'] == 'feedback':
 				local_file = os.path.join(feedback_dir, filename)
 				mesg = 'Teacher has some feedback for you.'
+				gotFeedback.add(filename)
+				with open(gemsSubFile, "wb+") as f:
+					pickle.dump({"gotFeedback": gotFeedback, "submitted": submitted}, f)
 			else:
 				local_file = os.path.join(gemsFOLDER, filename)
 				if os.path.exists(local_file):
@@ -369,6 +411,18 @@ class gemsCompleteRegistration(sublime_plugin.ApplicationCommand):
 			sublime.message_dialog('{} is registered.'.format(info['Name']))
 		with open(gemsFILE, 'w') as f:
 			f.write(json.dumps(info, indent=4))
+
+		if os.path.exists(gemsSubFile):
+			global gotFeedback
+			global submitted
+			diff = datetime.timedelta(seconds=time.time() - os.path.getmtime())
+			if diff<datetime.timedelta(hours=6):
+				with open(gemsSubFile, "rb") as f:
+					obj = pickle.load(f)
+					gotFeedback = obj['gotFeedback']
+					submitted = obj['submitted']
+
+
 
 # ------------------------------------------------------------------
 class gemsSetServerAddress(sublime_plugin.ApplicationCommand):
