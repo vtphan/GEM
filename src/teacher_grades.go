@@ -41,7 +41,8 @@ func teacher_gradesHandler(w http.ResponseWriter, r *http.Request, who string, u
 	if changed == "True" {
 		// If the original file is changed, there's feedback.  Copy it to whiteboard.
 		if prob, ok := ActiveProblems[sub.Filename]; ok {
-			AddFeedbackSQL.Exec(uid, student_id, content, time.Now(), sub.Sid)
+			result, _ := AddFeedbackSQL.Exec(uid, student_id, content, time.Now(), sub.Sid)
+			feedback_id, _ := result.LastInsertId()
 			mesg = "Feedback saved to student's board."
 			BoardsSem.Lock()
 			defer BoardsSem.Unlock()
@@ -49,7 +50,7 @@ func teacher_gradesHandler(w http.ResponseWriter, r *http.Request, who string, u
 				Content:      content,
 				Answer:       prob.Info.Answer,
 				Attempts:     0, // This tells the client this is an existing problem
-				Filename:     sub.Filename,
+				Filename:     "feedback-" + strconv.Itoa(int(feedback_id)) + "-" + sub.Filename,
 				Pid:          sub.Pid,
 				StartingTime: time.Now(),
 				Type:         "feedback",
