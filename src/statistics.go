@@ -5,10 +5,8 @@ package main
 
 import (
 	"fmt"
-	"html/template"
-
 	_ "github.com/mattn/go-sqlite3"
-
+	"html/template"
 	// "math"
 	"net/http"
 	"strconv"
@@ -62,7 +60,7 @@ func statisticsHandler(w http.ResponseWriter, r *http.Request) {
 		PrevPid:     pid - 1,
 	}
 	if pid > 0 {
-		rows, err := Database.Query("select score.student_id, score.score, score.graded_submission_number, problem.problem_uploaded_at, problem.problem_description, submission.id, submission.code_submitted_at, submission.completed from score join problem on score.problem_id=problem.id join submission on score.problem_id=submission.problem_id and score.student_id=submission.student_id where problem.id=? order by submission.id desc", pid)
+		rows, err := Database.Query("select score.student_id, score.score, score.graded_submission_number, problem.at, problem.problem_description, submission.id, submission.code_submitted_at, submission.completed from score join problem on score.problem_id=problem.id join submission on score.problem_id=submission.problem_id and score.student_id=submission.student_id where problem.id=? order by submission.id desc", pid)
 		if err != nil {
 			fmt.Println("Error retrieving problem statistics", pid, err)
 			return

@@ -11,6 +11,8 @@ import random
 import shutil
 import datetime
 import webbrowser
+import pickle
+import threading
 
 gemsUpdateIntervalLong  = 20000		# Update interval
 gemsUpdateIntervalShort = 10000		# When submission is being looked at
@@ -23,15 +25,23 @@ gemsSERVER = ''
 gemsSERVER_TIME = 0
 gemsConnected = False
 gemsUpdateMessage = {
-	1 : "Your {} submission for problem {} is being looked at.",
-	2 : "Teacher did not grade your {} submission for problem {}.",
-	3 : "Good effort!!!  However, the teacher did not think your {} solution for problem {} was correct.",
-	4 : "Your {} solution for problem {} was correct. You are now elligible to help your friends.",
+	1 : "Your submission is being looked at.",
+	2 : "Teacher did not grade your submission.",
+	3 : "Good effort!!!  However, the teacher did not think your solution was correct.",
+	4 : "Your solution was correct.",
 }
+# Set of filename: to check whether the student got a feedback against a problem
+gotFeedback = {}
 
-gemsCurrentHelpSubId = None
-gemsHelpRequestMessage = ["You have fetched a help request entry.", "There is no pending help request.", "You are not yet elligible to help"]
-gemsCurrentFiles = set()
+# Set of filename: to check whether the student already submitted for this problem.
+submitted = set()
+
+# Stores the submitted and gotFeedback in case sublime text exits
+gemsSubFile = os.path.join(os.path.dirname(os.path.realpath(__file__)), "sub.p")
+gemsBackFeedbackTimeout = 60*10 # 10 minutes
+gemsBackFeedbackTimers = {}
+isRegistered = False
+gemsBackFeedbackStatus = {}
 
 # ------------------------------------------------------------------
 class gemsAttendanceReport(sublime_plugin.ApplicationCommand):
@@ -85,17 +95,6 @@ class gemsPointsReport(sublime_plugin.ApplicationCommand):
 			sublime.active_window().open_file(report_file)
 
 # ------------------------------------------------------------------
-def get_word_from_num(n):
-	if n>10 and n<20:
-		return str(n)+'th'
-	if n%10==1:
-		return str(n)+'st'
-	if n%10==2:
-		return str(n)+'nd'
-	if n%10==3:
-		return str(n)+'rd'
-	return str(n)+'th'
-
 def gems_periodic_update():
 	global gemsTracking
 	response = gemsRequest('student_periodic_update', {}, verbal=False)
@@ -104,22 +103,16 @@ def gems_periodic_update():
 		gemsTracking = False
 		return
 	try:
-		submission_stat, board_stat, thank_stat, attempt_number, filename = response.split(';')
+		submission_stat, board_stat = response.split(';')
 		submission_stat = int(submission_stat)
 		board_stat = int(board_stat)
-		thank_stat = int(thank_stat)
-		attempt_number = int(attempt_number)
 
 		# Display messages if necessary
 		mesg = ""
 		if submission_stat > 0 and submission_stat in gemsUpdateMessage:
-			mesg = gemsUpdateMessage[submission_stat].format(get_word_from_num(attempt_number), filename[:filename.rfind(".")])
-		if thank_stat == 1:
-			mesg += "\nYour friend Thanked You for your help."
+			mesg = gemsUpdateMessage[submission_stat]
 		if board_stat == 1:
 			mesg += "\nTeacher placed new material on your board."
-		elif board_stat == 2:
-			mesg += "\nYou have feedback on your board."
 		mesg = mesg.strip()
 		if mesg != "":
 			sublime.message_dialog(mesg)
@@ -142,74 +135,74 @@ def gems_periodic_update():
 # ------------------------------------------------------------------
 def gems_share(self, edit, priority):
 	global gemsTracking
+	global gotFeedback
+	global submitted
+
 	fname = self.view.file_name()
 	if fname is None:
 		sublime.message_dialog('Cannot share unsaved content.')
 		return
 	content = self.view.substr(sublime.Region(0, self.view.size())).lstrip()
+	filename = os.path.basename(fname)
 	items = content.rsplit(gemsAnswerTag, 1)
 	if len(items)==2:
 		answer = items[1].strip()
 	else:
 		answer = ''
-	
-	if priority==1 and os.path.exists(fname+'.test_cases'):
-		with open(fname+'.test_cases', 'r') as f:
-			testCases = f.read()
-	else:
-		testCases = ''
-
 	data = dict(
 		content=content,
 		answer=answer,
-		testcases=testCases,
-		filename=os.path.basename(fname),
+		filename=filename,
 		priority=priority,
 	)
 	response = gemsRequest('student_shares', data)
 	sublime.message_dialog(response)
+	if priority == 1:
+		if filename in gotFeedback:
+			for feedback_filename in gotFeedback[filename]:
+				ask_for_back_feedback(filename, feedback_filename)
+		
+		with open(gemsSubFile, "wb+") as f:
+			pickle.dump({"gotFeedback": gotFeedback, "submitted": submitted}, f)
+
 	if gemsTracking==False:
 		gemsTracking = True
 		sublime.set_timeout_async(gems_periodic_update, 5000)
 
+def ask_for_back_feedback(filename, feedback_filename, fromEvent = False):
+	sublime.active_window().open_file(feedback_filename)
+	resp = sublime.yes_no_cancel_dialog("Was this feedback helpful? Please answer Yes or No", "Yes", "No")
+	if resp == sublime.DIALOG_YES:
+		send_student_back_feedback(filename, "yes", feedback_filename)
+	elif resp == sublime.DIALOG_NO:
+		send_student_back_feedback(filename, "no", feedback_filename)
+	elif resp == sublime.DIALOG_CANCEL:
+		ask_for_back_feedback(filename, feedback_filename)
+	if fromEvent == False:
+		sublime.active_window().active_view().close()
+
+def send_student_back_feedback(filename, response, feedback_filename):
+	global gemsBackFeedbackTimers
+	global gotFeedback
+	global gemsBackFeedbackStatus
+
+	if (filename, feedback_filename) in gemsBackFeedbackTimers:
+		gemsBackFeedbackTimers[(filename, feedback_filename)].cancel()
+		gemsBackFeedbackStatus[(filename, feedback_filename)] = False
+	gotFeedback[filename].remove(feedback_filename)
+	feedback_filename = os.path.basename(feedback_filename)
+	feedback_id = feedback_filename.split("-")[1]
+	data = dict(
+		filename=filename,
+		response=response,
+		feedback_id=feedback_id,
+	)
+	gemsRequest('save_back_feedback', data)
 # ------------------------------------------------------------------
 class gemsNeedHelp(sublime_plugin.TextCommand):
 	def run(self, edit):
-		# gems_share(self, edit, priority=2)
-		fname = self.view.file_name()
-		if fname is None:
-			sublime.message_dialog('Cannot share unsaved content.')
-			return
-		# if os.path.basename(fname) not in gemsCurrentFiles:
-		# 	sublime.message_dialog("Invalid file")
-		# 	return 
-		sublime.message_dialog("Walk me through your thought process for what you are trying to accomplish.")
-		sublime.active_window().show_input_panel("Click Enter to send help request:", "", self.get_need_help_with, None, self.get_need_help_with)
-		
+		gems_share(self, edit, priority=2)
 
-	# def get_trying_what(self, trying_what_message=""):
-	# 	self.trying_what_message = trying_what_message
-	# 	sublime.active_window().show_input_panel("Explain what you need help with:", "", self.get_need_help_with, None, self.get_need_help_with)
-
-	def get_need_help_with(self, need_help_with_message=""):
-		global gemsTracking
-		fname = self.view.file_name()
-		content = self.view.substr(sublime.Region(0, self.view.size())).lstrip()
-
-		# content += "\n\n# Explain what you are trying to do: "+self.trying_what_message
-		content += "\n\n# Explain what you need help with: "+need_help_with_message
-
-		data = dict(
-			content=content,
-			filename=os.path.basename(fname),
-			# trying_what=self.trying_what_message,
-			need_help_with=need_help_with_message,
-		)
-		response = gemsRequest('student_ask_help', data)
-		sublime.message_dialog(response)
-		if gemsTracking==False:
-			gemsTracking = True
-			sublime.set_timeout_async(gems_periodic_update, 5000)
 # ------------------------------------------------------------------
 class gemsGotIt(sublime_plugin.TextCommand):
 	def run(self, edit):
@@ -232,22 +225,29 @@ class gemsGetBoardContent(sublime_plugin.ApplicationCommand):
 		old_dir = os.path.join(gemsFOLDER, 'OLD')
 		if not os.path.exists(old_dir):
 			os.mkdir(old_dir)
+		
+		global gotFeedback
+		global submitted
 
 		for board in json_obj:
 			content = board['Content']
 			filename = board['Filename']
-			self.filename = filename
 			mesg = ''
-			if board['Type'] in ['feedback','peer_feedback']:
+			if board['Type'] == 'feedback':
+				global gemsBackFeedbackTimers
+				global gemsBackFeedbackStatus
+
+				problem_filename = filename[filename.find("-", 9)+1:]
 				local_file = os.path.join(feedback_dir, filename)
-				mesg = 'You have feedback'
-				
-				if board['Type'] == "peer_feedback":
-					self.message_id = board['Pid']
-					sublime.set_timeout_async(self.force_for_thank_you, 1000*10)
-			# elif board['Type'] == 'peer_feedback':
-			# 	local_file = os.path.join(feedback_dir, filename)
-			# 	mesg = 'You have feedback'
+				mesg = 'Teacher has some feedback for you.'
+				if problem_filename not in gotFeedback:
+					gotFeedback[problem_filename] = [] 
+				gotFeedback[problem_filename].append(local_file)
+				gemsBackFeedbackTimers[(problem_filename, local_file)] = threading.Timer(gemsBackFeedbackTimeout, ask_for_back_feedback, [problem_filename, local_file])
+				gemsBackFeedbackTimers[(problem_filename, local_file)].start()
+				gemsBackFeedbackStatus[(problem_filename, local_file)] = True
+				with open(gemsSubFile, "wb+") as f:
+					pickle.dump({"gotFeedback": gotFeedback, "submitted": submitted}, f)
 			else:
 				local_file = os.path.join(gemsFOLDER, filename)
 				if os.path.exists(local_file):
@@ -261,38 +261,8 @@ class gemsGetBoardContent(sublime_plugin.ApplicationCommand):
 			if sublime.active_window().id() == 0:
 				sublime.run_command('new_window')
 			sublime.active_window().open_file(local_file)
-			if board['Type'] == 'peer_feedback':
-				sublime.active_window().active_view().set_read_only(True)
-			# elif board['Type'] == 'new':
-			# 	gemsCurrentFiles.add(filename)
-			# if mesg != '':
-			# 	sublime.message_dialog(mesg)
-	def send_thank_you(self, message):
-		message = message.lower().strip()
-		if message != "yes" and message != "no":
-			self.force_for_thank_you()
-			return
-
-		data = {"useful": message, "message_id": self.message_id}
-		gemsRequest("student_send_thank_you", data)
-
-
-	def force_for_thank_you(self):
-		decision = sublime.yes_no_cancel_dialog("Please confirm: was this useful feedback?", "Yes", "No")
-		if decision == sublime.DIALOG_YES:
-			message = "yes"
-		elif decision == sublime.DIALOG_NO:
-			message = "no"
-		elif decision == sublime.DIALOG_CANCEL:
-			message = "cancel"
-		else:
-			self.force_for_thank_you()
-			return
-
-		data = {"useful": message, "message_id": self.message_id}
-		gemsRequest("student_send_thank_you", data)
-
-
+			if mesg != '':
+				sublime.message_dialog(mesg)
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -466,9 +436,23 @@ class gemsCompleteRegistration(sublime_plugin.ApplicationCommand):
 			uid, password = response.split(',')
 			info['Uid'] = int(uid)
 			info['Password'] = password.strip()
+			global isRegistered
+			isRegistered = True
 			sublime.message_dialog('{} is registered.'.format(info['Name']))
 		with open(gemsFILE, 'w') as f:
 			f.write(json.dumps(info, indent=4))
+
+		if os.path.exists(gemsSubFile):
+			global gotFeedback
+			global submitted
+			diff = datetime.timedelta(seconds=time.time() - os.path.getmtime(gemsSubFile))
+			if diff<datetime.timedelta(hours=6):
+				with open(gemsSubFile, "rb") as f:
+					obj = pickle.load(f)
+					gotFeedback = obj['gotFeedback']
+					submitted = obj['submitted']
+
+
 
 # ------------------------------------------------------------------
 class gemsSetServerAddress(sublime_plugin.ApplicationCommand):
@@ -487,25 +471,7 @@ class gemsSetServerAddress(sublime_plugin.ApplicationCommand):
 			info['Server'],
 			self.set,
 			None,
-			self.on_cancel)
-
-	def  on_cancel(self):
-		print("line 417")
-		try:
-			with open(gemsFILE, 'r') as f:
-				info = json.loads(f.read())
-		except:
-			info = dict()
-
-		if 'Server' not in info:
-			info['Server'] = ''
-		sublime.active_window().show_input_panel("Set server address.  Press Enter:",
-			info['Server'],
-			self.set,
-			None,
-			self.on_cancel)
-
-
+			None)
 
 	def set(self, addr):
 		addr = addr.strip()
@@ -589,80 +555,6 @@ class gemsSetName(sublime_plugin.ApplicationCommand):
 			sublime.message_dialog('Assigned name is set to ' + name)
 		else:
 			sublime.message_dialog("Name cannot be empty.")
-# ------------------------------------------------------------------
-
-class gemsAddTestCase(sublime_plugin.ApplicationCommand):
-	def run(self):
-		
-		sublime.active_window().show_input_panel("Input: ",
-			"",
-			self.set_input,
-			None,
-			None)
-
-	def set_input(self, test_input):
-		test_input = test_input.strip()
-		if len(test_input) > 0:
-			self.test_input = test_input
-			sublime.active_window().show_input_panel("Expected Output: ",
-			"",
-			self.set_output,
-			None,
-			None)
-		else:
-			sublime.message_dialog("Input cannot be empty.")
-	
-	def set_output(self, expected_output):
-		expected_output = expected_output.strip()
-		if len(expected_output) > 0:
-			test_cases = []
-			testCaseFile = sublime.active_window().active_view().file_name()+".test_cases"
-			testCaseFile = os.path.join(os.path.dirname(os.path.realpath(__file__)), testCaseFile)
-			try:
-				with open(testCaseFile, 'r') as f:
-					test_cases = json.loads(f.read())
-			except:
-				test_cases = []
-			test_cases.append({'input': self.test_input, 'output': expected_output})
-
-			# with open(testCaseFile, 'w') as f:
-			# 	f.write(json.dumps(test_cases, indent=4))
-			json.dump(test_cases, open(testCaseFile, 'w'))
-			sublime.message_dialog('Test case saved successfully.')
-		else:
-			sublime.message_dialog("Expected output cannot be empty.")
-
-
-
-class gemsGetTestCase(sublime_plugin.TextCommand):
-	def run(self, edit):
-		fname = self.view.file_name()
-		fname = os.path.basename(fname)
-		if fname is None:
-			sublime.message_dialog('Cannot share unsaved content.')
-			return
-
-		response = gemsRequest('get_testcase', {'file_name': fname})
-		if response is None:
-			return
-			
-		json_obj = json.loads(response)
-		if json_obj =="":
-			sublime.message_dialog("No test case found for this problem. Try again later.")
-			return
-
-		content = ""
-		for i, tc in enumerate(json_obj, 1):
-			input = tc['input']
-			output = tc['output']
-			content += "Input "+str(i)+"\n"+input+"\nExpected Output for Input "+str(i)+"\n"+output+"\n\n\n"
-		
-		local_file = os.path.join(gemsFOLDER, fname+".test_case.txt")
-		with open(local_file, 'w', encoding='utf-8') as fp:
-			fp.write(content)
-		if sublime.active_window().id() == 0:
-			sublime.run_command('new_window')
-		sublime.active_window().open_file(local_file)
 
 # ------------------------------------------------------------------
 class gemsUpdate(sublime_plugin.WindowCommand):
@@ -678,9 +570,9 @@ class gemsUpdate(sublime_plugin.WindowCommand):
 			module_file = os.path.join(package_path, "GEMStudent.py")
 			menu_file = os.path.join(package_path, "Main.sublime-menu")
 			version_file = os.path.join(package_path, "version.go")
-			urllib.request.urlretrieve("https://raw.githubusercontent.com/vtphan/GEM/alina/src/GEMStudent/GEMStudent.py", module_file)
-			urllib.request.urlretrieve("https://raw.githubusercontent.com/vtphan/GEM/alina/src/GEMStudent/Main.sublime-menu", menu_file)
-			urllib.request.urlretrieve("https://raw.githubusercontent.com/vtphan/GEM/alina/src/version.go", version_file)
+			urllib.request.urlretrieve("https://raw.githubusercontent.com/vtphan/GEM/master/src/GEMStudent/GEMStudent.py", module_file)
+			urllib.request.urlretrieve("https://raw.githubusercontent.com/vtphan/GEM/master/src/GEMStudent/Main.sublime-menu", menu_file)
+			urllib.request.urlretrieve("https://raw.githubusercontent.com/vtphan/GEM/master/src/version.go", version_file)
 			with open(version_file) as f:
 				lines = f.readlines()
 			for line in lines:
@@ -694,101 +586,21 @@ class gemsUpdate(sublime_plugin.WindowCommand):
 			sublime.message_dialog("GEM has been updated to version {}.".format(version))
 
 # ------------------------------------------------------------------
-class gemsGetFriendCode(sublime_plugin.TextCommand):
 
-	def is_enabled(self):
-		global gemsCurrentHelpSubId
-		if gemsCurrentHelpSubId is not None:
-			return False
-		return True
 
-	def run(self, edit):
-		global gemsCurrentHelpSubId
-		global gemsHelpRequestMessage
-		if gemsCurrentHelpSubId is not None:
-			sublime.message_dialog("You already have a submission to help")
-			return
+class gemsEventListeners(sublime_plugin.EventListener):
 
-		filename = self.view.file_name()
-		# print(filename)
-		filename = os.path.basename(filename)
-		
-		data = {"filename": filename}
-		response = gemsRequest("student_get_help_code", data)
-		if response is None:
-			sublime.message_dialog("Could not load any help submission")
-			return
-		response = json.loads(response)
-		content = response['Content']
-		filename = response['Filename']
-		status = response['Status']
-		if status>0:
-			sublime.message_dialog(gemsHelpRequestMessage[status])
-			return
-		
-		gemsCurrentHelpSubId = response['Sid']
-		# print("Submission ID", gemsCurrentHelpSubId)
-		helpFolder = os.path.join(gemsFOLDER, "HelpSubmissions/")
-		if not os.path.exists(helpFolder):
-			os.mkdir(helpFolder)
-		
-		local_file = os.path.join(helpFolder, filename)
-		# print(helpFolder, local_file, filename)
-		with open(local_file, 'w', encoding='utf-8') as f:
-			f.write(content)
-		if sublime.active_window().id() == 0:
-			sublime.run_command('new_window')
-		sublime.active_window().open_file(local_file)
-		# sublime.message_dialog("")
-		sublime.active_window().active_view().set_read_only(True)
-		sublime.message_dialog("Press Enter to send feedback. Press Esc to return without feedback.")
-		sublime.active_window().show_input_panel("Feedback:",
-			"",
-			self.send_help_message,
-			None,
-			self.return_without_feedback)
+    def on_pre_close(self, view):
+        if isRegistered == False:
+            return
+        filename = os.path.basename(view.file_name())
+        fn_splits = filename.split("-")
+        if filename is not None and len(fn_splits) > 2 and fn_splits[0] == "feedback" and fn_splits[1].isdigit():
+            view.window().focus_view(view)
+            feedback_dir = os.path.join(gemsFOLDER, 'FEEDBACK')
+            local_file = os.path.join(feedback_dir, filename)
+            fname = "".join(fn_splits[2:])
+            if (fname, local_file) in gemsBackFeedbackStatus and gemsBackFeedbackStatus[(fname, local_file)]==True:
+            	ask_for_back_feedback(fname, local_file, True)
 
-	def send_help_message(self, message):
-		global gemsCurrentHelpSubId
-
-		if message is None or message == "":
-			self.return_without_feedback()
-			# sublime.message_dialog("Help message can not be empty!")
-			# return
-		data = {"submission_id": gemsCurrentHelpSubId, "message": message}
-		response = gemsRequest("student_send_help_message", data)
-		gemsCurrentHelpSubId = None
-		sublime.active_window().run_command("close")
-		sublime.message_dialog(response)
-
-	def return_without_feedback(self):
-		global gemsCurrentHelpSubId
-		data = {"submission_id": gemsCurrentHelpSubId}
-		response = gemsRequest("student_return_without_feedback", data)
-		gemsCurrentHelpSubId = None
-		sublime.active_window().run_command("close")
-		sublime.message_dialog(response)
-	
-
-# class gemsReturnWithoutFeedback(sublime_plugin.WindowCommand):
-
-# 	def is_enabled(self):
-# 		global gemsCurrentHelpSubId
-# 		if gemsCurrentHelpSubId is None:
-# 			return False
-# 		return True
-
-# 	def run(self):
-# 		global gemsCurrentHelpSubId
-# 		# print("Sub id in return", gemsCurrentHelpSubId)
-# 		if gemsCurrentHelpSubId is None:
-# 			sublime.message_dialog("You don't have any submission to return")
-# 			return
-
-# 		data = {"submission_id": gemsCurrentHelpSubId}
-# 		response = gemsRequest("student_return_without_feedback", data)
-# 		gemsCurrentHelpSubId = None
-# 		sublime.message_dialog(response)
-# 		self.window.run_command("close")
-# 		self.window.run_command("hide_panel", {"cancel": True})
-
+# ------------------------------------------------------------------

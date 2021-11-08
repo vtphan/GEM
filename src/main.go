@@ -44,16 +44,6 @@ func init_handlers() {
 	http.HandleFunc("/bulletin_board_data", bulletin_board_dataHandler)
 	http.HandleFunc("/complete_registration", complete_registrationHandler)
 
-	http.HandleFunc("/student_ask_help", Authorize(studentAskHelpHandler))
-	http.HandleFunc("/student_get_help_code", Authorize(studentGetHelpCode))
-	http.HandleFunc("/student_return_without_feedback", Authorize(student_return_without_feedbackHandler))
-	http.HandleFunc("/student_send_help_message", Authorize(student_send_help_messageHandler))
-	http.HandleFunc("/student_send_thank_you", Authorize(sendThankYouHandler))
-
-	http.HandleFunc("/teacher_get_help_code", Authorize(teacherGetHelpCode))
-	http.HandleFunc("/teacher_return_without_feedback", Authorize(teacher_return_without_feedbackHandler))
-	http.HandleFunc("/teacher_send_help_message", Authorize(teacher_send_help_messageHandler))
-
 	http.HandleFunc("/teacher_gets_queue", Authorize(teacher_gets_queueHandler))
 	http.HandleFunc("/teacher_adds_bulletin_page", Authorize(teacher_adds_bulletin_pageHandler))
 	http.HandleFunc("/teacher_clears_submissions", Authorize(teacher_clears_submissionsHandler))
@@ -63,10 +53,9 @@ func init_handlers() {
 	http.HandleFunc("/teacher_gets", Authorize(teacher_getsHandler))
 	http.HandleFunc("/teacher_broadcasts", Authorize(teacher_broadcastsHandler))
 	http.HandleFunc("/teacher_gets_passcode", Authorize(teacher_gets_passcodeHandler))
+	http.HandleFunc("/save_back_feedback", Authorize(student_back_feedbackHandler))
 
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintf(w, "pong") })
-
-	http.HandleFunc("/get_testcase", Authorize(testcase_getsHandler))
 }
 
 //-----------------------------------------------------------------
@@ -129,6 +118,7 @@ func inform_name_server() {
 }
 
 //-----------------------------------------------------------------
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
 	config_file, teacher_file, student_file := "", "", ""

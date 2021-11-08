@@ -41,7 +41,8 @@ func teacher_gradesHandler(w http.ResponseWriter, r *http.Request, who string, u
 	if changed == "True" {
 		// If the original file is changed, there's feedback.  Copy it to whiteboard.
 		if prob, ok := ActiveProblems[sub.Filename]; ok {
-			AddFeedbackSQL.Exec(uid, student_id, content, time.Now(), sub.Sid)
+			result, _ := AddFeedbackSQL.Exec(uid, student_id, content, time.Now(), sub.Sid)
+			feedback_id, _ := result.LastInsertId()
 			mesg = "Feedback saved to student's board."
 			BoardsSem.Lock()
 			defer BoardsSem.Unlock()
@@ -49,7 +50,7 @@ func teacher_gradesHandler(w http.ResponseWriter, r *http.Request, who string, u
 				Content:      content,
 				Answer:       prob.Info.Answer,
 				Attempts:     0, // This tells the client this is an existing problem
-				Filename:     sub.Filename,
+				Filename:     "feedback-" + strconv.Itoa(int(feedback_id)) + "-" + sub.Filename,
 				Pid:          sub.Pid,
 				StartingTime: time.Now(),
 				Type:         "feedback",
@@ -60,25 +61,11 @@ func teacher_gradesHandler(w http.ResponseWriter, r *http.Request, who string, u
 
 	// If submission is dismissed, do not take that attempt away from the student.
 	if decision == "dismissed" {
-		// Students[student_id].SubmissionStatus = 2
-		subStat := &StudentSubmissionStatus{
-			Filename:      sub.Filename,
-			AttemptNumber: sub.AttemptNumber,
-			Status:        2,
-		}
-		Students[sub.Uid].SubmissionStatus = append(Students[sub.Uid].SubmissionStatus, subStat)
-
+		Students[student_id].SubmissionStatus = 2
 		ActiveProblems[sub.Filename].Attempts[student_id] += 1
 		fmt.Fprintf(w, "Submission dismissed.")
 	} else if decision == "ungraded" {
-		// Students[student_id].SubmissionStatus = 5
-		subStat := &StudentSubmissionStatus{
-			Filename:      sub.Filename,
-			AttemptNumber: sub.AttemptNumber,
-			Status:        2,
-		}
-		Students[sub.Uid].SubmissionStatus = append(Students[sub.Uid].SubmissionStatus, subStat)
-
+		Students[student_id].SubmissionStatus = 5
 		fmt.Fprintf(w, mesg)
 	} else {
 		// Update score based on the grading decision
@@ -89,28 +76,10 @@ func teacher_gradesHandler(w http.ResponseWriter, r *http.Request, who string, u
 		scoring_mesg := add_or_update_score(decision, sub.Pid, sub.Uid, uid, partial_credits)
 		mesg = scoring_mesg + "\n" + mesg
 		if decision == "correct" {
-			// Students[sub.Uid].SubmissionStatus = 4
-			subStat := &StudentSubmissionStatus{
-				Filename:      sub.Filename,
-				AttemptNumber: sub.AttemptNumber,
-				Status:        4,
-			}
-			Students[sub.Uid].SubmissionStatus = append(Students[sub.Uid].SubmissionStatus, subStat)
-
+			Students[sub.Uid].SubmissionStatus = 4
 			ActiveProblems[sub.Filename].Attempts[student_id] = 0 // This prevents further submission.
-			pid := sub.Pid
-			if _, ok := HelpEligibleStudents[pid][sub.Uid]; !ok {
-				HelpEligibleStudents[pid][sub.Uid] = true
-				SeenHelpSubmissions[sub.Uid] = map[int]bool{}
-			}
 		} else {
-			// Students[student_id].SubmissionStatus = 3
-			subStat := &StudentSubmissionStatus{
-				Filename:      sub.Filename,
-				AttemptNumber: sub.AttemptNumber,
-				Status:        3,
-			}
-			Students[sub.Uid].SubmissionStatus = append(Students[sub.Uid].SubmissionStatus, subStat)
+			Students[student_id].SubmissionStatus = 3
 		}
 
 		// Update submission complete time

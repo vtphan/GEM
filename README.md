@@ -29,11 +29,7 @@ import os; package_path = os.path.join(sublime.packages_path(), "GEMTeacher"); o
 ```
 (4) Paste copied code to Console and hit enter.
 
-#### Running the GEM server
-
-The instructor must run the GEM server.  The server can be run permanently or each time class starts.
-
-Method 2 (deployment mode): Download the latest server ([Windows](https://www.dropbox.com/s/bjb8fvikjze20bu/gem.exe?dl=0), [MacOS](https://www.dropbox.com/s/vo3zn6pz8mhp083/gem?dl=0)) and make them *executable* on teacher's computer.  This command-line server needs to be run on the teacher's computer every time GEM is used in class.
+(5) Download the latest server and make them executable on teacher's computer. This command-line server needs to be run on the teacher's computer every time GEM is used in class.
 
 (6) First-time configuration:
 Add teachers
@@ -97,5 +93,4 @@ import os; package_path = os.path.join(sublime.packages_path(), "GEMAssistant");
 (4) Paste copied code to Console and hit enter.
 
 (5) in Sublime Text: (i) specify a folder on their computers to store local files, (ii) set the server address, which is shown when the server is run, and (iii) complete the registration by simply entering your given username.
-
 

@@ -32,13 +32,7 @@ func teacher_getsHandler(w http.ResponseWriter, r *http.Request, who string, uid
 			if WorkingSubs[i].Priority == priority {
 				selected = WorkingSubs[i]
 				WorkingSubs = append(WorkingSubs[:i], WorkingSubs[i+1:]...)
-				// Students[selected.Uid].SubmissionStatus = 1
-				subStat := &StudentSubmissionStatus{
-					Filename:      selected.Filename,
-					AttemptNumber: selected.AttemptNumber,
-					Status:        1,
-				}
-				Students[selected.Uid].SubmissionStatus = append(Students[selected.Uid].SubmissionStatus, subStat)
+				Students[selected.Uid].SubmissionStatus = 1
 				break
 			}
 		}
@@ -56,13 +50,7 @@ func teacher_getsHandler(w http.ResponseWriter, r *http.Request, who string, uid
 				j := first_sub_w_priority[i]
 				selected = WorkingSubs[j]
 				WorkingSubs = append(WorkingSubs[:j], WorkingSubs[j+1:]...)
-				// Students[selected.Uid].SubmissionStatus = 1
-				subStat := &StudentSubmissionStatus{
-					Filename:      selected.Filename,
-					AttemptNumber: selected.AttemptNumber,
-					Status:        1,
-				}
-				Students[selected.Uid].SubmissionStatus = append(Students[selected.Uid].SubmissionStatus, subStat)
+				Students[selected.Uid].SubmissionStatus = 1
 				break
 			}
 		}
